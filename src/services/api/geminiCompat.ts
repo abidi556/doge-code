@@ -20,6 +20,8 @@ type AnyBlock = Record<string, unknown>
 
 type GeminiPart = {
   text?: string
+  thought?: boolean
+  thoughtSignature?: string
   functionCall?: {
     name?: string
     args?: unknown
@@ -338,6 +340,8 @@ export async function* createAnthropicStreamFromGemini(input: {
   let started = false
   let textStarted = false
   let textContentIndex: number | null = null
+  let thinkingStarted = false
+  let thinkingContentIndex: number | null = null
   let nextContentIndex = 0
   let promptTokens = 0
   let completionTokens = 0
@@ -390,6 +394,34 @@ export async function* createAnthropicStreamFromGemini(input: {
         const parts = candidate?.content?.parts ?? []
 
         for (const part of parts) {
+          if (typeof part.text === 'string' && part.text.length > 0 && part.thought) {
+            if (!thinkingStarted) {
+              thinkingStarted = true
+              thinkingContentIndex = nextContentIndex
+              nextContentIndex += 1
+              yield {
+                type: 'content_block_start',
+                index: thinkingContentIndex,
+                content_block: {
+                  type: 'thinking',
+                  thinking: '',
+                  signature: typeof part.thoughtSignature === 'string' ? part.thoughtSignature : '',
+                },
+              } as BetaRawMessageStreamEvent
+            }
+
+            yield {
+              type: 'content_block_delta',
+              index: thinkingContentIndex ?? 0,
+              delta: {
+                type: 'thinking_delta',
+                thinking: part.text,
+              },
+            } as BetaRawMessageStreamEvent
+            emittedAnyContent = true
+            continue
+          }
+
           if (typeof part.text === 'string' && part.text.length > 0) {
             if (!textStarted) {
               textStarted = true
@@ -482,6 +514,13 @@ export async function* createAnthropicStreamFromGemini(input: {
     yield {
       type: 'content_block_stop',
       index: textContentIndex,
+    } as BetaRawMessageStreamEvent
+  }
+
+  if (thinkingStarted && thinkingContentIndex !== null) {
+    yield {
+      type: 'content_block_stop',
+      index: thinkingContentIndex,
     } as BetaRawMessageStreamEvent
   }
 

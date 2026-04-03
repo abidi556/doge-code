@@ -53,9 +53,11 @@ type OpenAIResponsesEvent = {
   item?: Record<string, unknown>
   delta?: string
   arguments_delta?: string
+  summary?: Array<{ text?: string }>
   part?: {
     type?: string
     text?: string
+    summary?: Array<{ text?: string }>
   }
   response?: {
     id?: string
@@ -261,6 +263,36 @@ function getEventTextDelta(event: OpenAIResponsesEvent): string | undefined {
   return undefined
 }
 
+function getEventThinkingDelta(event: OpenAIResponsesEvent): string | undefined {
+  const eventSummary = Array.isArray(event.summary)
+    ? event.summary
+        .map(part => (typeof part?.text === 'string' ? part.text : ''))
+        .join('')
+    : ''
+  if (eventSummary.length > 0) return eventSummary
+
+  const partSummary = Array.isArray(event.part?.summary)
+    ? event.part.summary
+        .map(part => (typeof part?.text === 'string' ? part.text : ''))
+        .join('')
+    : ''
+  if (partSummary.length > 0) return partSummary
+
+  if (
+    typeof event.part?.text === 'string' &&
+    event.part.text.length > 0 &&
+    event.type?.includes('reasoning')
+  ) {
+    return event.part.text
+  }
+
+  if (typeof event.delta === 'string' && event.delta.length > 0 && event.type?.includes('reasoning')) {
+    return event.delta
+  }
+
+  return undefined
+}
+
 function getToolCallDetails(event: OpenAIResponsesEvent): { id?: string; name?: string } {
   const item = event.item ?? {}
   return {
@@ -283,6 +315,8 @@ export async function* createAnthropicStreamFromOpenAIResponses(input: {
   let started = false
   let textStarted = false
   let textContentIndex: number | null = null
+  let thinkingStarted = false
+  let thinkingContentIndex: number | null = null
   let nextContentIndex = 0
   let emittedAnyContent = false
   let promptTokens = 0
@@ -339,6 +373,33 @@ export async function* createAnthropicStreamFromOpenAIResponses(input: {
 
         const eventType = event.type ?? ''
         const textDelta = getEventTextDelta(event)
+        const thinkingDelta = getEventThinkingDelta(event)
+        if (thinkingDelta && eventType.includes('reasoning')) {
+          if (!thinkingStarted) {
+            thinkingStarted = true
+            thinkingContentIndex = nextContentIndex
+            nextContentIndex += 1
+            yield {
+              type: 'content_block_start',
+              index: thinkingContentIndex,
+              content_block: {
+                type: 'thinking',
+                thinking: '',
+                signature: '',
+              },
+            } as BetaRawMessageStreamEvent
+          }
+
+          yield {
+            type: 'content_block_delta',
+            index: thinkingContentIndex ?? 0,
+            delta: {
+              type: 'thinking_delta',
+              thinking: thinkingDelta,
+            },
+          } as BetaRawMessageStreamEvent
+          emittedAnyContent = true
+        }
         if (textDelta && (eventType.includes('text') || eventType.includes('content_part'))) {
           if (!textStarted) {
             textStarted = true
@@ -452,6 +513,13 @@ export async function* createAnthropicStreamFromOpenAIResponses(input: {
     yield {
       type: 'content_block_stop',
       index: textContentIndex,
+    } as BetaRawMessageStreamEvent
+  }
+
+  if (thinkingStarted && thinkingContentIndex !== null) {
+    yield {
+      type: 'content_block_stop',
+      index: thinkingContentIndex,
     } as BetaRawMessageStreamEvent
   }
 
