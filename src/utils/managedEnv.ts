@@ -1,7 +1,7 @@
 import { isRemoteManagedSettingsEligible } from '../services/remoteManagedSettings/syncCache.js'
 import { clearCACertsCache } from './caCerts.js'
 import { getGlobalConfig } from './config.js'
-import { readCustomApiStorage } from './customApiStorage.js'
+import { readCurrentCustomApiProvider } from './customApiStorage.js'
 import { isEnvTruthy } from './envUtils.js'
 import {
   isProviderManagedEnvVar,
@@ -202,20 +202,21 @@ export function applyConfigEnvironmentVariables(): void {
 }
 
 function applyPersistedCustomApiEndpointEnv(): void {
-  const customApiEndpoint = {
-    ...(getGlobalConfig().customApiEndpoint ?? {}),
-    ...readCustomApiStorage(),
+  const currentProvider = readCurrentCustomApiProvider()
+
+  delete process.env.ANTHROPIC_BASE_URL
+  delete process.env.DOGE_API_KEY
+  delete process.env.ANTHROPIC_MODEL
+
+  if (currentProvider?.baseURL) {
+    process.env.ANTHROPIC_BASE_URL = currentProvider.baseURL
   }
 
-  if (customApiEndpoint?.baseURL) {
-    process.env.ANTHROPIC_BASE_URL = customApiEndpoint.baseURL
+  if (currentProvider?.apiKey) {
+    process.env.DOGE_API_KEY = currentProvider.apiKey
   }
 
-  if (customApiEndpoint?.apiKey) {
-    process.env.DOGE_API_KEY = customApiEndpoint.apiKey
-  }
-
-  if (customApiEndpoint?.model) {
-    process.env.ANTHROPIC_MODEL = customApiEndpoint.model
+  if (currentProvider?.model) {
+    process.env.ANTHROPIC_MODEL = currentProvider.model
   }
 }

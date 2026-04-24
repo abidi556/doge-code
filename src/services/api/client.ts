@@ -99,8 +99,7 @@ export async function getAnthropicClient({
   fetchOverride?: ClientOptions['fetch']
   source?: string
 }): Promise<Anthropic> {
-  const customApiProvider =
-    readCustomApiStorage().provider ?? getGlobalCompatProvider()
+  const customApiProvider = readCustomApiStorage().provider ?? getGlobalCompatProvider()
   const containerId = process.env.CLAUDE_CODE_CONTAINER_ID
   const remoteSessionId = process.env.CLAUDE_CODE_REMOTE_SESSION_ID
   const clientApp = process.env.CLAUDE_AGENT_SDK_CLIENT_APP

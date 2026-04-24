@@ -1,6 +1,5 @@
 import type { PermissionMode } from '../permissions/PermissionMode.js'
-import { getGlobalConfig } from '../config.js'
-import { readCustomApiStorage } from '../customApiStorage.js'
+import { readCurrentCustomApiProvider, readCustomApiStorage } from '../customApiStorage.js'
 import { capitalize } from '../stringUtils.js'
 import { MODEL_ALIASES, type ModelAlias } from './aliases.js'
 import { applyBedrockRegionPrefix, getBedrockRegionPrefix } from './bedrock.js'
@@ -134,24 +133,17 @@ export function getAgentModelDisplay(model: string | undefined): string {
  * Get available model options for agents
  */
 export function getAgentModelOptions(): AgentModelOption[] {
-  const customModels = [
-    ...(getGlobalConfig().customApiEndpoint?.savedModels ?? []),
-    ...(readCustomApiStorage().savedModels ?? []),
-  ]
-    .map(model => model.trim())
-    .filter(Boolean)
+  const currentProvider = readCurrentCustomApiProvider()
+  const customModels = (currentProvider?.savedModels ?? []).map(model => model.trim()).filter(Boolean)
 
-  const customApiProvider =
-    readCustomApiStorage().provider ??
-    getGlobalConfig().customApiEndpoint?.provider ??
-    'anthropic'
+  const customApiProvider = currentProvider?.provider ?? readCustomApiStorage().provider ?? 'anthropic'
 
   if (customApiProvider === 'openai' || customApiProvider === 'gemini' || customModels.length > 0) {
     return [
       ...[...new Set(customModels)].map(model => ({
         value: model,
         label: model,
-        description: 'Custom model',
+        description: currentProvider?.name ?? 'Custom model',
       })),
       {
         value: 'inherit',

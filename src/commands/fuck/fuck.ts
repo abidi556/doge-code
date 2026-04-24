@@ -29,6 +29,8 @@ export const call: LocalCommandCall = async (_args, context) => {
       apiKey: undefined,
       model: undefined,
     },
+    customApiProviders: [],
+    currentCustomApiProviderId: undefined,
     customApiKeyResponses: {
       approved: [],
       rejected: [],

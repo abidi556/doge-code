@@ -10,7 +10,7 @@ import {
   AuthenticationError,
 } from '@anthropic-ai/sdk'
 import { getModelStrings } from './modelStrings.js'
-import { getGlobalConfig } from '../config.js'
+import { readCurrentCustomApiProvider } from '../customApiStorage.js'
 
 // Cache valid models to avoid repeated API calls
 const validModelCache = new Map<string, boolean>()
@@ -22,7 +22,7 @@ export async function validateModel(
   model: string,
 ): Promise<{ valid: boolean; error?: string }> {
   const normalizedModel = model.trim()
-  const customBaseURL = getGlobalConfig().customApiEndpoint?.baseURL
+  const customBaseURL = readCurrentCustomApiProvider()?.baseURL
 
   // Empty model is invalid
   if (!normalizedModel) {

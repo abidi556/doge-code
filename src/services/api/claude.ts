@@ -1821,10 +1821,7 @@ async function* queryModel(
         // BetaMessageStream calls partialParse() on every input_json_delta, which we don't need
         // since we handle tool input accumulation ourselves
         // biome-ignore lint/plugin: main conversation loop handles attribution separately
-        const customApiConfig = {
-          ...(getGlobalConfig().customApiEndpoint ?? {}),
-          ...readCustomApiStorage(),
-        }
+        const customApiConfig = readCustomApiStorage()
         const compatProvider = customApiConfig.provider ?? 'anthropic'
         const openAICompatMode = customApiConfig.openaiCompatMode ?? 'chat_completions'
         if (compatProvider === 'gemini') {

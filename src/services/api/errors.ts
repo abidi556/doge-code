@@ -904,7 +904,7 @@ export function getAssistantMessageFromError(
   // available. Guide the user to /model so they can pick a valid one.
   // For 3P users, suggest a specific fallback model they can try.
   if (error instanceof APIError && error.status === 404) {
-    if (getGlobalConfig().customApiEndpoint?.baseURL) {
+    if (process.env.ANTHROPIC_BASE_URL) {
       return createAssistantAPIErrorMessage({
         content: `Custom gateway request failed with 404 for model ${model}. This usually means the relay endpoint is incompatible with Claude Code's current request shape, rather than the model name itself. Current gateway: ${process.env.ANTHROPIC_BASE_URL}.`,
         error: 'invalid_request',

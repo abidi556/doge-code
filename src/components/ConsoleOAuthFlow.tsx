@@ -13,7 +13,7 @@ import { OAuthService } from '../services/oauth/index.js';
 import { getOauthAccountInfo, validateForceLoginOrg } from '../utils/auth.js';
 import { getGlobalConfig, saveGlobalConfig } from '../utils/config.js';
 import { normalizeApiKeyForConfig } from '../utils/authPortable.js';
-import { readCustomApiStorage, writeCustomApiStorage } from '../utils/customApiStorage.js';
+import { getCurrentCustomApiProviderWithIndex, persistCustomApiProviders, readCurrentCustomApiProvider } from '../utils/customApiStorage.js';
 import { logError } from '../utils/log.js';
 import { getSettings_DEPRECATED } from '../utils/settings/settings.js';
 import { Select } from './CustomSelect/select.js';
@@ -75,10 +75,7 @@ export function ConsoleOAuthFlow({
   const forceLoginMethod = forceLoginMethodProp ?? settings.forceLoginMethod;
   const orgUUID = settings.forceLoginOrgUUID;
   const forcedMethodMessage = forceLoginMethod === 'claudeai' ? 'Login method pre-selected: Subscription Plan (Claude Pro/Max)' : forceLoginMethod === 'console' ? 'Login method pre-selected: API Usage Billing (Anthropic Console)' : null;
-  const persistedCustomApiEndpoint = useMemo(() => ({
-    ...(getGlobalConfig().customApiEndpoint ?? {}),
-    ...readCustomApiStorage()
-  }), []);
+  const persistedCustomApiEndpoint = useMemo(() => readCurrentCustomApiProvider() ?? {}, []);
   const persistedProvider = persistedCustomApiEndpoint.provider ?? 'anthropic';
   const persistedOpenAICompatMode = persistedCustomApiEndpoint.openaiCompatMode ?? 'chat_completions';
   const terminal = useTerminalNotification();
@@ -199,32 +196,41 @@ export function ConsoleOAuthFlow({
     const nextApiKey = customApiKey.trim();
     const nextModel = customModel.trim();
     const normalizedKey = nextApiKey ? normalizeApiKeyForConfig(nextApiKey) : null;
-    const nextSavedModels = nextModel ? [...new Set([...(persistedCustomApiEndpoint.savedModels ?? []), nextModel])] : persistedCustomApiEndpoint.savedModels ?? [];
+    const currentProviderState = getCurrentCustomApiProviderWithIndex();
+    const currentProvider = currentProviderState.provider;
+    const nextSavedModels = nextModel ? [...new Set([...(currentProvider?.savedModels ?? persistedCustomApiEndpoint.savedModels ?? []), nextModel])] : currentProvider?.savedModels ?? persistedCustomApiEndpoint.savedModels ?? [];
     process.env.ANTHROPIC_BASE_URL = nextBaseURL;
     process.env.DOGE_API_KEY = nextApiKey;
     process.env.ANTHROPIC_MODEL = nextModel;
     saveGlobalConfig(current => ({
       ...current,
-      customApiEndpoint: {
-        provider: compatibleApiProvider,
-        openaiCompatMode: compatibleApiProvider === 'openai' ? openAICompatMode : undefined,
-        baseURL: nextBaseURL,
-        apiKey: undefined,
-        model: nextModel,
-        savedModels: nextSavedModels
-      },
       customApiKeyResponses: normalizedKey ? {
         approved: [...new Set([...(current.customApiKeyResponses?.approved ?? []), normalizedKey])],
         rejected: (current.customApiKeyResponses?.rejected ?? []).filter(key => key !== normalizedKey)
       } : current.customApiKeyResponses
     }));
-    writeCustomApiStorage({
-      provider: compatibleApiProvider,
-      openaiCompatMode: compatibleApiProvider === 'openai' ? openAICompatMode : undefined,
-      baseURL: nextBaseURL,
-      apiKey: nextApiKey,
-      model: nextModel,
-      savedModels: nextSavedModels
+    persistCustomApiProviders({
+      currentProviderId: currentProvider?.id,
+      providers: currentProvider ? [
+        ...((getGlobalConfig().customApiProviders ?? []).map(provider => provider.id === currentProvider.id ? {
+          ...provider,
+          provider: compatibleApiProvider,
+          openaiCompatMode: compatibleApiProvider === 'openai' ? openAICompatMode : undefined,
+          baseURL: nextBaseURL,
+          apiKey: nextApiKey,
+          model: nextModel,
+          savedModels: nextSavedModels
+        } : provider))
+      ] : [{
+        id: `provider-1-oauth`,
+        name: 'Provider 1',
+        provider: compatibleApiProvider,
+        openaiCompatMode: compatibleApiProvider === 'openai' ? openAICompatMode : undefined,
+        baseURL: nextBaseURL,
+        apiKey: nextApiKey,
+        model: nextModel,
+        savedModels: nextSavedModels
+      }]
     });
   }, [compatibleApiProvider, customApiKey, customBaseURL, customModel, openAICompatMode, persistedCustomApiEndpoint.savedModels]);
   const handleSubmitCustomConfig = useCallback((value: string) => {

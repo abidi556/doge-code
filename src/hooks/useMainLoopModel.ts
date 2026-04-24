@@ -6,7 +6,7 @@ import {
   type ModelName,
   parseUserSpecifiedModel,
 } from '../utils/model/model.js'
-import { readCustomApiStorage } from '../utils/customApiStorage.js'
+import { readCurrentCustomApiProvider, readCustomApiStorage } from '../utils/customApiStorage.js'
 
 // The value of the selector is a full model name that can be used directly in
 // API calls. Use this over getMainLoopModel() when the component needs to
@@ -29,6 +29,7 @@ export function useMainLoopModel(): ModelName {
   const model = parseUserSpecifiedModel(
     mainLoopModelForSession ??
       mainLoopModel ??
+      readCurrentCustomApiProvider()?.model ??
       readCustomApiStorage().model ??
       getDefaultMainLoopModelSetting(),
   )

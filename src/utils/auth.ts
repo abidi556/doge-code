@@ -254,8 +254,7 @@ export function getAnthropicApiKeyWithSource(
     ? undefined
     : process.env.DOGE_API_KEY
 
-  const persistedCustomApiKey =
-    readCustomApiStorage().apiKey || getGlobalConfig().customApiEndpoint?.apiKey
+  const persistedCustomApiKey = readCustomApiStorage().apiKey
   const effectiveApiKeyEnv = apiKeyEnv || persistedCustomApiKey
 
   // Always check for direct environment variable when the user ran claude --print.

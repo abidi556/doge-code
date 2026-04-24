@@ -2,6 +2,7 @@
 import addDir from './commands/add-dir/index.js'
 import addModel from './commands/add-model/index.js'
 import removeModel from './commands/remove-model/index.js'
+import provider from './commands/provider/index.js'
 import autofixPr from './commands/autofix-pr/index.js'
 import backfillSessions from './commands/backfill-sessions/index.js'
 import btw from './commands/btw/index.js'
@@ -260,6 +261,7 @@ const COMMANDS = memoize((): Command[] => [
   addDir,
   addModel,
   removeModel,
+  provider,
   advisor,
   agents,
   branch,

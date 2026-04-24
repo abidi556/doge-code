@@ -189,6 +189,17 @@ export type GlobalConfig = {
     model?: string
     savedModels?: string[]
   }
+  customApiProviders?: {
+    id: string
+    name?: string
+    provider?: 'anthropic' | 'openai' | 'gemini'
+    openaiCompatMode?: 'chat_completions' | 'responses'
+    baseURL?: string
+    apiKey?: string
+    model?: string
+    savedModels?: string[]
+  }[]
+  currentCustomApiProviderId?: string
   /**
    * @deprecated Use settings.apiKeyHelper instead.
    */
@@ -600,6 +611,8 @@ function createDefaultGlobalConfig(): GlobalConfig {
       model: undefined,
       savedModels: [],
     },
+    customApiProviders: [],
+    currentCustomApiProviderId: undefined,
     numStartups: 0,
     installMethod: undefined,
     autoUpdates: undefined,
@@ -647,6 +660,8 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = createDefaultGlobalConfig()
 
 export const GLOBAL_CONFIG_KEYS = [
   'customApiEndpoint',
+  'customApiProviders',
+  'currentCustomApiProviderId',
   'apiKeyHelper',
   'installMethod',
   'autoUpdates',

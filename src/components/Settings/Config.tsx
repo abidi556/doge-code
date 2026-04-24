@@ -10,6 +10,7 @@ import figures from 'figures';
 import { type GlobalConfig, saveGlobalConfig, getCurrentProjectConfig, type OutputStyle } from '../../utils/config.js';
 import { normalizeApiKeyForConfig } from '../../utils/authPortable.js';
 import { getGlobalConfig, getAutoUpdaterDisabledReason, formatAutoUpdaterDisabledReason, getRemoteControlAtStartup } from '../../utils/config.js';
+import { formatCustomApiProviderIndex, formatCustomApiProviderType, getCurrentCustomApiProviderWithIndex, updateCustomApiProviders } from '../../utils/customApiStorage.js';
 import chalk from 'chalk';
 import { permissionModeTitle, permissionModeFromString, toExternalPermissionMode, isExternalPermissionMode, EXTERNAL_PERMISSION_MODES, PERMISSION_MODES, type ExternalPermissionMode, type PermissionMode } from '../../utils/permissions/PermissionMode.js';
 import { getAutoModeEnabledState, hasAutoModeOptInAnySource, transitionPlanAutoMode } from '../../utils/permissions/permissionSetup.js';
@@ -104,10 +105,11 @@ export function Config({
   const initialOutputStyle = React.useRef(currentOutputStyle);
   const [currentLanguage, setCurrentLanguage] = useState<string | undefined>(settingsData?.language);
   const initialLanguage = React.useRef(currentLanguage);
-  const [customBaseURL, setCustomBaseURL] = useState(getGlobalConfig().customApiEndpoint?.baseURL ?? '');
-  const [customApiKey, setCustomApiKey] = useState(getGlobalConfig().customApiEndpoint?.apiKey ?? '');
-  const [customModelValue, setCustomModelValue] = useState(getGlobalConfig().customApiEndpoint?.model ?? process.env.ANTHROPIC_MODEL ?? '');
-  const [openAICompatMode, setOpenAICompatMode] = useState(getGlobalConfig().customApiEndpoint?.openaiCompatMode ?? 'chat_completions');
+  const currentCustomProviderState = getCurrentCustomApiProviderWithIndex();
+  const [customBaseURL, setCustomBaseURL] = useState(currentCustomProviderState.provider?.baseURL ?? '');
+  const [customApiKey, setCustomApiKey] = useState(currentCustomProviderState.provider?.apiKey ?? '');
+  const [customModelValue, setCustomModelValue] = useState(currentCustomProviderState.provider?.model ?? process.env.ANTHROPIC_MODEL ?? '');
+  const [openAICompatMode, setOpenAICompatMode] = useState(currentCustomProviderState.provider?.openaiCompatMode ?? 'chat_completions');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [isSearchMode, setIsSearchMode] = useState(true);
@@ -264,19 +266,23 @@ export function Config({
     });
   }
 
-  const customApiProvider = getGlobalConfig().customApiEndpoint?.provider;
-  const customApiProviderDisplay = customApiProvider === 'openai'
-    ? 'OpenAI-compatible'
-    : customApiProvider === 'gemini'
-      ? 'Gemini API'
-      : customApiProvider === 'anthropic'
-        ? 'Anthropic-compatible'
-        : 'Not set';
+  const currentCustomProvider = getCurrentCustomApiProviderWithIndex();
+  const customApiProvider = currentCustomProvider.provider?.provider;
+  const customApiProviderDisplay = formatCustomApiProviderType(customApiProvider);
+  const currentProviderLabel = currentCustomProvider.provider
+    ? `${currentCustomProvider.provider.name} (${formatCustomApiProviderIndex(currentCustomProvider.index)})`
+    : 'Not set';
 
   // TODO: Add MCP servers
   const settingsItems: Setting[] = [
   // Global settings
   {
+    id: 'currentCustomProvider',
+    label: `Current provider: ${currentProviderLabel}`,
+    value: currentProviderLabel,
+    type: 'managedEnum' as const,
+    onChange() {}
+  }, {
     id: 'customApiProvider',
     label: `Compatible API provider: ${customApiProviderDisplay}`,
     value: customApiProviderDisplay,
@@ -284,15 +290,17 @@ export function Config({
     type: 'enum' as const,
     onChange(value: string) {
       const nextProvider = value === 'OpenAI-compatible' ? 'openai' : value === 'Gemini API' ? 'gemini' : value === 'Anthropic-compatible' ? 'anthropic' : undefined;
-      saveGlobalConfig(current => ({
+      updateCustomApiProviders(current => ({
         ...current,
-        customApiEndpoint: {
-          ...current.customApiEndpoint,
-          provider: nextProvider,
-          openaiCompatMode: nextProvider === 'openai'
-            ? current.customApiEndpoint?.openaiCompatMode ?? 'chat_completions'
-            : undefined
-        }
+        providers: (current.providers ?? []).map(provider =>
+          provider.id === currentCustomProvider.provider?.id
+            ? {
+                ...provider,
+                provider: nextProvider,
+                openaiCompatMode: nextProvider === 'openai' ? provider.openaiCompatMode ?? 'chat_completions' : undefined,
+              }
+            : provider,
+        ),
       }));
       setGlobalConfig(getGlobalConfig());
     }
@@ -303,15 +311,16 @@ export function Config({
     type: 'managedEnum' as const,
     onChange(value: string) {
       const nextValue = value === 'Not set' ? '' : value;
-      saveGlobalConfig(current => ({
+      updateCustomApiProviders(current => ({
         ...current,
-        customApiEndpoint: {
-          ...current.customApiEndpoint,
-          baseURL: nextValue
-        }
+        providers: (current.providers ?? []).map(provider =>
+          provider.id === currentCustomProvider.provider?.id ? { ...provider, baseURL: nextValue || undefined } : provider,
+        ),
       }));
       if (nextValue) {
         process.env.ANTHROPIC_BASE_URL = nextValue;
+      } else {
+        delete process.env.ANTHROPIC_BASE_URL;
       }
       setCustomBaseURL(nextValue);
       setGlobalConfig(getGlobalConfig());
@@ -324,37 +333,47 @@ export function Config({
     type: 'managedEnum' as const,
     onChange(value: string) {
       const nextValue = value === 'Not set' ? '' : value;
-      saveGlobalConfig(current => ({
+      updateCustomApiProviders(current => ({
         ...current,
-        customApiEndpoint: {
-          ...current.customApiEndpoint,
-          apiKey: nextValue
-        }
+        providers: (current.providers ?? []).map(provider =>
+          provider.id === currentCustomProvider.provider?.id ? { ...provider, apiKey: nextValue || undefined } : provider,
+        ),
       }));
       if (nextValue) {
         process.env.DOGE_API_KEY = nextValue;
+      } else {
+        delete process.env.DOGE_API_KEY;
       }
       setCustomApiKey(nextValue);
       setGlobalConfig(getGlobalConfig());
     }
   }, {
     id: 'customApiModel',
-    label: `Compatible API model: ${customModelValue || 'Not set'}`,
+    label: `${currentCustomProvider.provider?.name ?? 'Provider'} model: ${customModelValue || 'Not set'}`,
     value: customModelValue || 'Not set',
     type: 'managedEnum' as const,
     onChange(value: string) {
       const nextValue = value === 'Not set' ? '' : value;
-      const nextSavedModels = nextValue ? [...new Set([...(getGlobalConfig().customApiEndpoint?.savedModels ?? []), nextValue])] : getGlobalConfig().customApiEndpoint?.savedModels;
-      saveGlobalConfig(current => ({
+      updateCustomApiProviders(current => ({
         ...current,
-        customApiEndpoint: {
-          ...current.customApiEndpoint,
-          model: nextValue,
-          savedModels: nextSavedModels
-        }
+        providers: (current.providers ?? []).map(provider => {
+          if (provider.id !== currentCustomProvider.provider?.id) {
+            return provider;
+          }
+          const nextSavedModels = nextValue
+            ? [...new Set([...(provider.savedModels ?? []), nextValue])]
+            : provider.savedModels;
+          return {
+            ...provider,
+            model: nextValue || undefined,
+            savedModels: nextSavedModels,
+          };
+        }),
       }));
       if (nextValue) {
         process.env.ANTHROPIC_MODEL = nextValue;
+      } else {
+        delete process.env.ANTHROPIC_MODEL;
       }
       setCustomModelValue(nextValue);
       setGlobalConfig(getGlobalConfig());
@@ -367,12 +386,11 @@ export function Config({
     type: 'enum' as const,
     onChange(value: string) {
       const nextValue = value === 'responses' ? 'responses' : 'chat_completions';
-      saveGlobalConfig(current => ({
+      updateCustomApiProviders(current => ({
         ...current,
-        customApiEndpoint: {
-          ...current.customApiEndpoint,
-          openaiCompatMode: nextValue
-        }
+        providers: (current.providers ?? []).map(provider =>
+          provider.id === currentCustomProvider.provider?.id ? { ...provider, openaiCompatMode: nextValue } : provider,
+        ),
       }));
       setOpenAICompatMode(nextValue);
       setGlobalConfig(getGlobalConfig());

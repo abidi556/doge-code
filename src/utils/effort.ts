@@ -3,7 +3,7 @@ import { isUltrathinkEnabled } from './thinking.js'
 import { getInitialSettings } from './settings/settings.js'
 import { isProSubscriber, isMaxSubscriber, isTeamSubscriber } from './auth.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from 'src/services/analytics/growthbook.js'
-import { readCustomApiStorage } from './customApiStorage.js'
+import { readCurrentCustomApiProvider, readCustomApiStorage } from './customApiStorage.js'
 import { getAPIProvider } from './model/providers.js'
 import { get3PModelCapabilityOverride } from './model/modelSupportOverrides.js'
 import { isEnvTruthy } from './envUtils.js'
@@ -22,11 +22,11 @@ export const EFFORT_LEVELS = [
 export type EffortValue = EffortLevel | number
 
 export function isOpenAICompatProvider(): boolean {
-  return readCustomApiStorage().provider === 'openai'
+  return (readCurrentCustomApiProvider()?.provider ?? readCustomApiStorage().provider) === 'openai'
 }
 
 export function isGeminiCompatProvider(): boolean {
-  return readCustomApiStorage().provider === 'gemini'
+  return (readCurrentCustomApiProvider()?.provider ?? readCustomApiStorage().provider) === 'gemini'
 }
 
 export function modelSupportsNoThinking(model: string): boolean {
