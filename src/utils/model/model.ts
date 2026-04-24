@@ -35,6 +35,11 @@ export type ModelSetting = ModelName | ModelAlias | null
 
 type ModelSelectionTier = 'fast' | 'balance' | 'quality'
 
+export type ConfiguredTierModel = {
+  model: ModelSetting
+  providerId?: string
+}
+
 export function getSmallFastModel(): ModelName {
   return (
     process.env.ANTHROPIC_SMALL_FAST_MODEL ||
@@ -213,18 +218,23 @@ export function getDefaultMainLoopModel(): ModelName {
   return parseUserSpecifiedModel(getDefaultMainLoopModelSetting())
 }
 
-function getConfiguredTierModel(
+export function getConfiguredTierModel(
   tier: ModelSelectionTier,
-): ModelSetting | undefined {
+): ConfiguredTierModel | undefined {
   const settings = getSettings_DEPRECATED() || {}
-  const configuredModel = settings.modelSelection?.[tier]
-  if (!configuredModel || !isModelAllowed(configuredModel)) {
+  const configuredValue = settings.modelSelection?.[tier]
+  const configuredModel =
+    typeof configuredValue === 'string'
+      ? { model: configuredValue }
+      : configuredValue
+
+  if (!configuredModel?.model || !isModelAllowed(configuredModel.model)) {
     return undefined
   }
   return configuredModel
 }
 
-function resolveConfiguredTierModel(
+export function resolveConfiguredTierModel(
   tier: ModelSelectionTier,
   has1mTag = false,
   visitedTiers = new Set<ModelSelectionTier>(),
@@ -242,9 +252,9 @@ function resolveConfiguredTierModel(
   nextVisitedTiers.add(tier)
 
   const resolvedModel = parseUserSpecifiedModelInternal(
-    has1mTag && !has1mContext(configuredModel)
-      ? `${configuredModel}[1m]`
-      : configuredModel,
+    has1mTag && !has1mContext(configuredModel.model)
+      ? `${configuredModel.model}[1m]`
+      : configuredModel.model,
     nextVisitedTiers,
   )
 
@@ -583,6 +593,26 @@ function parseUserSpecifiedModelInternal(
  * so the autocompact that follows is correct. Skills that already specify [1m]
  * are left untouched.
  */
+export function getConfiguredProviderIdForModel(
+  model: ModelName,
+): string | undefined {
+  const has1mTag = has1mContext(model)
+
+  for (const tier of ['fast', 'balance', 'quality'] as const) {
+    const configuredModel = getConfiguredTierModel(tier)
+    if (!configuredModel?.providerId) {
+      continue
+    }
+
+    const resolvedModel = resolveConfiguredTierModel(tier, has1mTag)
+    if (resolvedModel === model) {
+      return configuredModel.providerId
+    }
+  }
+
+  return undefined
+}
+
 export function resolveSkillModelOverride(
   skillModel: string,
   currentModel: string,

@@ -12,6 +12,7 @@ import { ConfigurableShortcutHint } from '../../components/ConfigurableShortcutH
 import { Box, Text } from '../../ink.js'
 import type { LocalJSXCommandCall } from '../../types/command.js'
 import { renderModelSetting } from '../../utils/model/model.js'
+import type { ModelOption } from '../../utils/model/modelOptions.js'
 import {
   getSettingsForSource,
   updateSettingsForSource,
@@ -33,8 +34,27 @@ const TIER_HEADERS: Record<TierKey, string> = {
   quality: 'Choose the default model used when code requests opus.',
 }
 
-function formatTierValue(value: string | undefined): string {
-  return value ? renderModelSetting(value) : 'Default'
+function getTierModelValue(
+  value:
+    | string
+    | { model: string; providerId?: string }
+    | undefined,
+): string | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  return typeof value === 'string' ? value : value.model
+}
+
+function formatTierValue(
+  value:
+    | string
+    | { model: string; providerId?: string }
+    | undefined,
+): string {
+  const model = getTierModelValue(value)
+  return model ? renderModelSetting(model) : 'Default'
 }
 
 function getTierOptions(): OptionWithDescription<TierOption>[] {
@@ -64,11 +84,20 @@ function getTierOptions(): OptionWithDescription<TierOption>[] {
   ]
 }
 
-function saveTierModel(tier: TierKey, model: string | null): void {
+function saveTierModel(
+  tier: TierKey,
+  model: string | null,
+  option?: ModelOption,
+): void {
   const currentSelection = getSettingsForSource('userSettings')?.modelSelection
   const nextSelection = {
     ...currentSelection,
-    [tier]: model ?? undefined,
+    [tier]: model
+      ? {
+          model,
+          providerId: option?.providerId,
+        }
+      : undefined,
   }
 
   const hasAnySelection = Object.values(nextSelection).some(Boolean)
@@ -114,22 +143,25 @@ function ModelSelectionCommand({ onDone }: Props): React.ReactNode {
     [onDone],
   )
 
-  const handleModelSelect = React.useCallback((model: string | null) => {
-    if (!activeTier) {
-      return
-    }
+  const handleModelSelect = React.useCallback(
+    (model: string | null, _effort: unknown, option?: ModelOption) => {
+      if (!activeTier) {
+        return
+      }
 
-    saveTierModel(activeTier, model)
-    setActiveTier(null)
-    setVersion(current => current + 1)
-  }, [activeTier])
+      saveTierModel(activeTier, model, option)
+      setActiveTier(null)
+      setVersion(current => current + 1)
+    },
+    [activeTier],
+  )
 
   if (activeTier !== null) {
     return (
       <Pane color="permission">
         <ModelPicker
-          initial={getSettingsForSource('userSettings')?.modelSelection?.[activeTier] ?? null}
-          onSelect={model => handleModelSelect(model)}
+          initial={getTierModelValue(getSettingsForSource('userSettings')?.modelSelection?.[activeTier]) ?? null}
+          onSelect={handleModelSelect}
           onCancel={handleCancel}
           skipSettingsWrite
           headerText={TIER_HEADERS[activeTier]}

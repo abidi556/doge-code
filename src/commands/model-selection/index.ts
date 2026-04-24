@@ -7,12 +7,24 @@ import { renderModelSetting } from '../../utils/model/model.js'
 
 function getTierSummary(): string {
   const selection = getSettings_DEPRECATED()?.modelSelection
-  const fast = selection?.fast ? renderModelSetting(selection.fast) : 'Default'
+  const fast = selection?.fast
+    ? renderModelSetting(
+        typeof selection.fast === 'string' ? selection.fast : selection.fast.model,
+      )
+    : 'Default'
   const balance = selection?.balance
-    ? renderModelSetting(selection.balance)
+    ? renderModelSetting(
+        typeof selection.balance === 'string'
+          ? selection.balance
+          : selection.balance.model,
+      )
     : 'Default'
   const quality = selection?.quality
-    ? renderModelSetting(selection.quality)
+    ? renderModelSetting(
+        typeof selection.quality === 'string'
+          ? selection.quality
+          : selection.quality.model,
+      )
     : 'Default'
 
   return `Fast ${fast} · Balance ${balance} · Quality ${quality}`

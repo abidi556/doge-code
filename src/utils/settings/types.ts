@@ -378,9 +378,33 @@ export const SettingsSchema = lazySchema(() =>
         .describe('Override the default model used by Claude Code'),
       modelSelection: z
         .object({
-          fast: z.string().optional(),
-          balance: z.string().optional(),
-          quality: z.string().optional(),
+          fast: z
+            .union([
+              z.string(),
+              z.object({
+                model: z.string(),
+                providerId: z.string().optional(),
+              }),
+            ])
+            .optional(),
+          balance: z
+            .union([
+              z.string(),
+              z.object({
+                model: z.string(),
+                providerId: z.string().optional(),
+              }),
+            ])
+            .optional(),
+          quality: z
+            .union([
+              z.string(),
+              z.object({
+                model: z.string(),
+                providerId: z.string().optional(),
+              }),
+            ])
+            .optional(),
         })
         .optional()
         .describe(
