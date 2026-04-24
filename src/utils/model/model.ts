@@ -28,6 +28,7 @@ import { LIGHTNING_BOLT } from '../../constants/figures.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
 import { capitalize } from '../stringUtils.js'
+import { readCustomApiProvidersStorage } from '../customApiStorage.js'
 
 export type ModelShortName = string
 export type ModelName = string
@@ -608,6 +609,18 @@ export function getConfiguredProviderIdForModel(
     if (resolvedModel === model) {
       return configuredModel.providerId
     }
+  }
+
+  // Fallback: If no tier matches or the matched tier lacks a providerId (e.g., legacy string configs),
+  // scan custom providers directly to see if this model is associated with one.
+  const allProviders = readCustomApiProvidersStorage().providers ?? []
+  const matchedProvider = allProviders.find(
+    p =>
+      p.model?.trim() === model ||
+      (p.savedModels && p.savedModels.some(s => s.trim() === model)),
+  )
+  if (matchedProvider) {
+    return matchedProvider.id
   }
 
   return undefined
