@@ -33,8 +33,14 @@ export type ModelShortName = string
 export type ModelName = string
 export type ModelSetting = ModelName | ModelAlias | null
 
+type ModelSelectionTier = 'fast' | 'balance' | 'quality'
+
 export function getSmallFastModel(): ModelName {
-  return process.env.ANTHROPIC_SMALL_FAST_MODEL || getDefaultHaikuModel()
+  return (
+    process.env.ANTHROPIC_SMALL_FAST_MODEL ||
+    resolveConfiguredTierModel('fast') ||
+    getDefaultHaikuModel()
+  )
 }
 
 export function isNonCustomOpusModel(model: ModelName): boolean {
@@ -155,12 +161,12 @@ export function getRuntimeMainLoopModel(params: {
     permissionMode === 'plan' &&
     !exceeds200kTokens
   ) {
-    return getDefaultOpusModel()
+    return resolveConfiguredTierModel('quality') || getDefaultOpusModel()
   }
 
   // sonnetplan by default
   if (getUserSpecifiedModelSetting() === 'haiku' && permissionMode === 'plan') {
-    return getDefaultSonnetModel()
+    return resolveConfiguredTierModel('balance') || getDefaultSonnetModel()
   }
 
   return mainLoopModel
@@ -205,6 +211,44 @@ export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
  */
 export function getDefaultMainLoopModel(): ModelName {
   return parseUserSpecifiedModel(getDefaultMainLoopModelSetting())
+}
+
+function getConfiguredTierModel(
+  tier: ModelSelectionTier,
+): ModelSetting | undefined {
+  const settings = getSettings_DEPRECATED() || {}
+  const configuredModel = settings.modelSelection?.[tier]
+  if (!configuredModel || !isModelAllowed(configuredModel)) {
+    return undefined
+  }
+  return configuredModel
+}
+
+function resolveConfiguredTierModel(
+  tier: ModelSelectionTier,
+  has1mTag = false,
+  visitedTiers = new Set<ModelSelectionTier>(),
+): ModelName | undefined {
+  if (visitedTiers.has(tier)) {
+    return undefined
+  }
+
+  const configuredModel = getConfiguredTierModel(tier)
+  if (!configuredModel) {
+    return undefined
+  }
+
+  const nextVisitedTiers = new Set(visitedTiers)
+  nextVisitedTiers.add(tier)
+
+  const resolvedModel = parseUserSpecifiedModelInternal(
+    has1mTag && !has1mContext(configuredModel)
+      ? `${configuredModel}[1m]`
+      : configuredModel,
+    nextVisitedTiers,
+  )
+
+  return isModelAllowed(resolvedModel) ? resolvedModel : undefined
 }
 
 // @[MODEL LAUNCH]: Add a canonical name mapping for the new model below.
@@ -445,6 +489,13 @@ export function getPublicModelName(model: ModelName): string {
 export function parseUserSpecifiedModel(
   modelInput: ModelName | ModelAlias,
 ): ModelName {
+  return parseUserSpecifiedModelInternal(modelInput, new Set())
+}
+
+function parseUserSpecifiedModelInternal(
+  modelInput: ModelName | ModelAlias,
+  visitedTiers: Set<ModelSelectionTier>,
+): ModelName {
   const modelInputTrimmed = modelInput.trim()
   const normalizedModel = modelInputTrimmed.toLowerCase()
 
@@ -456,13 +507,25 @@ export function parseUserSpecifiedModel(
   if (isModelAlias(modelString)) {
     switch (modelString) {
       case 'opusplan':
-        return getDefaultSonnetModel() + (has1mTag ? '[1m]' : '') // Sonnet is default, Opus in plan mode
+        return (
+          resolveConfiguredTierModel('balance', has1mTag, visitedTiers) ||
+          getDefaultSonnetModel() + (has1mTag ? '[1m]' : '')
+        ) // Sonnet is default, Opus in plan mode
       case 'sonnet':
-        return getDefaultSonnetModel() + (has1mTag ? '[1m]' : '')
+        return (
+          resolveConfiguredTierModel('balance', has1mTag, visitedTiers) ||
+          getDefaultSonnetModel() + (has1mTag ? '[1m]' : '')
+        )
       case 'haiku':
-        return getDefaultHaikuModel() + (has1mTag ? '[1m]' : '')
+        return (
+          resolveConfiguredTierModel('fast', has1mTag, visitedTiers) ||
+          getDefaultHaikuModel() + (has1mTag ? '[1m]' : '')
+        )
       case 'opus':
-        return getDefaultOpusModel() + (has1mTag ? '[1m]' : '')
+        return (
+          resolveConfiguredTierModel('quality', has1mTag, visitedTiers) ||
+          getDefaultOpusModel() + (has1mTag ? '[1m]' : '')
+        )
       case 'best':
         return getBestModel()
       default:

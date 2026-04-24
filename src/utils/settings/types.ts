@@ -376,6 +376,16 @@ export const SettingsSchema = lazySchema(() =>
         .string()
         .optional()
         .describe('Override the default model used by Claude Code'),
+      modelSelection: z
+        .object({
+          fast: z.string().optional(),
+          balance: z.string().optional(),
+          quality: z.string().optional(),
+        })
+        .optional()
+        .describe(
+          'Override the default model mapping for Fast/Balance/Quality tiers used by haiku/sonnet/opus aliases.',
+        ),
       // Enterprise allowlist of models
       availableModels: z
         .array(z.string())
